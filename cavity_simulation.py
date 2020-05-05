@@ -7,32 +7,58 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.constants as con
-
-#%% Definition of reflectivities and losses
+# import seaborn as sns
+# sns.set() 
+# sns.set_context("talk")
 
 c = con.c                       # Speed of light (m/s)
 
+# #%% Definition of reflectivities and losses
+# # DLCZ cavity
+
+# p = {'I_inc': 1,                # Input power (W)
+#      'R_in': 0.87,              # Reflectivity of input mirror (%)
+#      'R_out': 0.999,            # Reflectivity of output mirror (%)
+#      'R_n':[0.999],             # Additional mirrors (%)
+     
+#      'p': np.array([0.8]),     # Effective cavity length (equals 2L for linear cavity) (m)
+#      'n': np.array([1]),      # Refractive index of medium
+#      'a': np.array([0]),        # Absorption coefficient of medium (1/m)
+# #     'R': np.array([0]),        # All mirror refl, including R_in and R_out (%)
+#      'L': np.array([0.11]),        # Extra losses per roundtrip (%)
+     
+#      'p_0': np.array([0.4]),   # Effective first cavity leg (L for linear cavity) (m)
+#      'n_0': np.array([1]),    # Refractive index on first leg
+#      'a_0': np.array([0]),      # Absorption coefficient of medium on first leg (1/m)
+#      'R_0': np.array([0.999]),       # Mirrors on first leg (%)
+#      'L_0': np.array([0.05]),      # Extra losses on first leg (%)
+     
+#      'lambda': 780e-9,          # Central wavelength (m)
+#      'high_res': False}         # High resolution (only for low finesse)
+
+#%% Definition of reflectivities and losses
+# FP filtering cavity
+
 p = {'I_inc': 1,                # Input power (W)
-     'R_in': 0.9,               # Reflectivity of input mirror (%)
-     'R_out': 0.9,              # Reflectivity of output mirror (%)
-     'R_n':[1],                  # Additional mirrors (%)
+     'R_in': 0.97,              # Reflectivity of input mirror (%)
+     'R_out': 0.97,             # Reflectivity of output mirror (%)
+     'R_n':[],                  # Additional mirrors (%)
      
-     'p': np.array([0.08]),     # Effective cavity length (equals 2L for linear cavity) (m)
-     'n': np.array([1.5]),      # Refractive index of medium
-     'a': np.array([0]),        # Absorption coefficient of medium (1/m)
-#     'R': np.array([0]),        # All mirror refl, including R_in and R_out (%)
-     'L': np.array([0]),        # Extra losses per roundtrip (%)
+     'p': np.array([16e-3]),    # Effective cavity length (equals 2L for linear cavity) (m)
+     'n': np.array([1.53]),     # Refractive index of medium
+     'a': np.array([]),         # Absorption coefficient of medium (1/m)
+     'L': np.array([0.008]),    # Extra losses per roundtrip (%)
      
-     'p_0': np.array([0.04]),   # Effective first cavity leg (L for linear cavity) (m)
-     'n_0': np.array([1.5]),    # Refractive index on first leg
-     'a_0': np.array([0]),      # Absorption coefficient of medium on first leg (1/m)
+     'p_0': np.array([]),   # Effective first cavity leg (L for linear cavity) (m)
+     'n_0': np.array([]),    # Refractive index on first leg
+     'a_0': np.array([]),      # Absorption coefficient of medium on first leg (1/m)
      'R_0': np.array([]),       # Mirrors on first leg (%)
-     'L_0': np.array([0]),      # Extra losses on first leg (%)
+     'L_0': np.array([]),      # Extra losses on first leg (%)
      
      'lambda': 780e-9,          # Central wavelength (m)
      'high_res': False}         # High resolution (only for low finesse)
 
-# Updates cavity parameters. Depend on the definition of parameters p above
+#%% Updates cavity parameters. Depend on the definition of parameters p above
 def p_update(p):
     p_temp = p.copy()
     
@@ -62,7 +88,7 @@ def p_update(p):
 p = p_update(p)
 
 #%%
-f_min = c/780.01e-9 # Minimum frequency
+f_min = c/780.051e-9 # Minimum frequency
 f_max = c/780e-9     # Maximum frequency
 
 # List of frequencies*2pi between f_min and f_max
@@ -71,9 +97,10 @@ omega = np.linspace(2*np.pi*f_min,2*np.pi*f_max,30000)
 def fields(p, omega):
     g_omega = np.exp(-1j*omega*p['p_eff']/c)
     E_circ =   1j*(1-p['R_in'])**(1/2)/(1-p['g_rt_2']**(1/2)*g_omega)*p['E_inc']
+    E_circ_per_E_launch = 1/(1-p['g_rt_2']**(1/2)*g_omega)
     E_trans =  1j*(1-p['R_out'])**(1/2)*E_circ*p['g_rt_2_0']**(1/2)
     E_refl =   1/p['R_in']**(1/2)*(p['R_in'] -p['g_rt_2']**(1/2)*g_omega)/(1- p['g_rt_2']**(1/2)*g_omega)
-    return [E_circ, E_trans, E_refl]
+    return [E_circ, E_trans, E_refl,E_circ_per_E_launch]
 
 def cav_params(p):
     params = {}
@@ -81,8 +108,10 @@ def cav_params(p):
     params['q'] = p['p_eff']/p['lambda']
     params['F'] = np.pi*p['g_rt_2']**(1/4)/(1-p['g_rt_2']**(1/2))
     params['FWHM'] = 2*c/np.pi/p['p_eff']*np.arcsin((1-p['g_rt_2']**(1/2))/(2*p['g_rt_2']**(1/4)))
+    # next one is wrong. does not contain the alpha
     params['Esc_eff_trans'] = (1-p['R_out'])/(sum(1-p['R'])+sum(p['L']))
     params['Esc_eff_back'] = (1-p['R_in'])/(sum(1-p['R'])+sum(p['L']))
+    params['Intra_cav_enh'] = 2*params['F']/np.pi
     
     print("--- Cavity characteristics ---")
     for i in params:
@@ -95,12 +124,11 @@ def cav_params(p):
     
 plt.close('all')
 fig,ax = plt.subplots(1,4, figsize = (12,3), num = 1)
+para = "L"
 
-para = "R_out"
-
-for scanner in [0.6,0.8,0.99]:
+for scanner in [np.array([0.11])]:
     p_temp = p.copy()
-    p_temp[para] = scanner
+    # p_temp[para] = scanner
     
     if not p_temp['high_res']:
         p_temp["p_0"] = p_temp["p"]/2
@@ -112,7 +140,7 @@ for scanner in [0.6,0.8,0.99]:
     p_temp = p_update(p_temp)
     label = str(scanner)
     
-    E_circ, E_trans, E_refl = fields(p_temp, omega)
+    E_circ, E_trans, E_refl, E_circ_per_E_launch = fields(p_temp, omega)
     cav_params(p_temp)
     
     ax[0].plot(omega, np.abs(E_circ/p['E_inc'] )**2, label =  label)
@@ -137,3 +165,4 @@ ax[3].set_ylabel(r"$I_{loss}/I_{inc}$")
 ax[3].legend(title = para)
 
 plt.tight_layout()
+
