@@ -75,7 +75,7 @@ def plotting(ax,helper_dist,p,n,lc,label):
     
     ax.set_ylim((ylim[0]*1.2, ylim[1]*1.2))
     
-def propagate(param, ax,lc,label):
+def propagate(param, ax,lc,label = "l"):
     """
     Propagation of a Gaussian beam along z.
 
@@ -128,19 +128,21 @@ def propagate(param, ax,lc,label):
 
 # Define a scneary with a couple of transfer matrixes and
 # corresponding positions
-dist = [0.3,0.6, 1, 1.2,1.3]
-f1,f2,f3 = 0.2, 0.1, 0.6
-n1,n2 = 1,2
-objects = [ThinLens(f1),ThinLens(f2),ThinLens(f3),CurvedRefraction(0.3,n1,n2),CurvedRefraction(-0.3,n2,n1)]
-n = [n1,n1,n1,n1,n1,n1]
+# dist = [0.3,0.6, 1, 1.2,1.3]
+# f1,f2,f3 = 0.2, 0.1, 0.6
+# n1,n2 = 1,2
+# objects = [ThinLens(f1),ThinLens(f2),ThinLens(f3),CurvedRefraction(0.3,n1,n2),CurvedRefraction(-0.3,n2,n1)]
+# n = [n1,n1,n1,n1,n1,n1]
 
-n1,n2 = 1,1          # Some refractive indices
-waist = 0.05e-3         # Beam waist (m)
-dist = [0.2]   # Position of objects, array of length len(dist)
-plot_range = (0,0.5)     # Lotting range, should be biger than "dist"
-n = [n1,n1,n2,n1]      # Refractive index, array of length len(dist)+1
+n1,n2 = 1,1.4         # Some refractive indices
+waist = 500e-6         # Beam waist (m)
+dist = [0.4]   # Position of objects, array of length len(dist)
+plot_range = (0,1.8)     # Lotting range, should be biger than "dist"
+n = [n1]  *(len(dist)+1)    # Refractive index, array of length len(dist)+1
+# n = [n1,n1,n2,n1]
 # Objects at the positions given by "dist"
-objects = [ThinLens(0.1)]
+objects = [ThinLens(0.1), ThinLens(0.1)]
+objects = [ThinLens(0.2)]
 
 param = {"dist": dist,
          "objects": objects,
@@ -155,7 +157,7 @@ c = itertools.cycle(colors)
 
 # Loop through some parameter set
 # for f1 in [.05, .1, .15, .2,2]:
-#for f1 in [1]:
-param_c = param.copy()
-# param_c["objects"][0] = ThinLens(f1)
-p_propagated = propagate(param, ax, next(c), f1)
+for waist in [100e-6,200e-6, 50e-6]:
+    param_c = param.copy()
+    param_c["p_init"] = BeamParameter(780e-9,0, w = waist)
+    p_propagated = propagate(param_c, ax, next(c))
