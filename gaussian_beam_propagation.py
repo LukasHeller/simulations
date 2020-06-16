@@ -1,23 +1,17 @@
-# Add refractive index in sympy code...
-
 import numpy as np
 import matplotlib.pyplot as plt
-from sympy.physics.optics import BeamParameter, \
-    ThinLens, FreeSpace, \
-    CurvedMirror, FlatMirror, \
-    CurvedRefraction, FlatRefraction
-    
-# from sympy.physics.optics import BeamParameter
-        
 import itertools
+import gaussopt
+from gaussopt import RayTransferMatrix, BeamParameter, \
+    ThinLens, FreeSpace, \
+    CurvedRefraction, FlatRefraction
 
 prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
-
-
-def omega(p, z, focus,n):
+    
+def omega(p, z, focus):
     """
-    Waist of the beam
+    Waist of the beam along z.
 
     Parameters
     ----------
@@ -33,17 +27,40 @@ def omega(p, z, focus,n):
     array of beam waist
 
     """
-    w_0 = float(p.w_0)/np.sqrt(n)
-    print(w_0)
-    return w_0*np.sqrt(1+((z-focus)/float(p.z_r))**2)
+    return p.w_0*np.sqrt(1+((z-focus)/p.z_r)**2)
 
-def plotting(ax,helper_dist,p,n,lc,label):
+def R(p, z, focus):
     """
-    Plots the wasit of the beam as it propagates along the z-axis
+    Radius of Curvature of the beam along z.
 
     Parameters
     ----------
-    ax : axis
+    p : TYPE
+        DESCRIPTION.
+    z : TYPE
+        DESCRIPTION.
+    focus : TYPE
+        DESCRIPTION.
+    n : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
+    print(focus)
+    print(p.z_r)
+    return (z-focus)*(1+(p.z_r/(z-focus))**2)
+
+def plotting(axes,helper_dist,p,lc,label):
+    """
+    Plots the waist of the beam as it propagates along the z-axis
+
+    Parameters
+    ----------
+    axes : array of two axis, for waist and radius
         axis to plot onto
     helper_dist : array (m)
         array of positions of objects, including Zero and End
@@ -61,19 +78,30 @@ def plotting(ax,helper_dist,p,n,lc,label):
     """
     for i, prop in enumerate(p):
         z = np.linspace(helper_dist[i], helper_dist[i+1], 200)
-        focus = helper_dist[i] - float(prop.z)
-        ax.plot(z*1e2, omega(prop,z,focus,n[i])*1e6, lc)
-        ax.plot(z*1e2, -omega(prop,z,focus,n[i])*1e6, lc)
+        focus = helper_dist[i] - prop.z
+        axes[0].plot(z*1e2, omega(prop,z,focus)*1e6, color = lc)
+        axes[0].plot(z*1e2, -omega(prop,z,focus)*1e6, color = lc)
+        import pdb
+        # pdb.set_trace()
+        axes[1].plot(z*1e2, R(prop,z,focus), color = lc, ls = ":")
         
-    ax.lines[-1].set_label(label)
-    ylim = ax.get_ylim()
-    
-    for i, prop in enumerate(p):
-        ax.axvline(helper_dist[i]*1e2, color = 'grey')
-        ax.fill_between((helper_dist[i]*1e2,helper_dist[i+1]*1e2),
-                        (1e4,1e4),(-1e4,-1e4), alpha = 1-1/n[i], color = "b")
-    
-    ax.set_ylim((ylim[0]*1.2, ylim[1]*1.2))
+        print(f"--- {helper_dist[i]*1e2} to {helper_dist[i+1]*1e2} ---")
+        print(f"w_0: {prop.w_0*1e6} um")
+        print(f"z_r: {prop.z_r*1e2} cm")
+        print()
+        
+    for ax in axes:
+        ax.lines[-1].set_label(label)
+        ylim = ax.get_ylim()
+        
+        for i, prop in enumerate(p):
+            ax.axvline(helper_dist[i]*1e2, color = 'grey')
+            ax.fill_between((helper_dist[i]*1e2,helper_dist[i+1]*1e2),
+                            (1e4,1e4),(-1e4,-1e4), alpha = 1-1/prop.n, color = "b")
+        
+        ax.set_ylim((ylim[0]*1.2, ylim[1]*1.2))
+        
+
     
 def propagate(param, ax,lc,label = "l"):
     """
@@ -103,61 +131,115 @@ def propagate(param, ax,lc,label = "l"):
     helper_dist = [p["plot_range"][0]] + p["dist"]
     rel_dist = [helper_dist[i+1]-helper_dist[i] for i in range(len(helper_dist)-1)]
     
-    
     for d,obj in zip(rel_dist,p["objects"]):
-        new = obj*FreeSpace(d)*p["p"][-1]
-        p["p"].append(BeamParameter(new.wavelen, float(new.z), w=float(new.w_0)))
-    
+        p2 = obj*FreeSpace(d)*p["p"][-1]
+        p2.n = obj.n2
+        p["p"].append(p2)
     
     helper_dist = helper_dist + [p["plot_range"][1]]     
-    plotting(ax, helper_dist, p["p"], p["refr"], lc, label)
+    plotting(ax, helper_dist, p["p"], lc, label)
     
-    # This cannot be done. Must change the x_ticks instead, otherwise
-    # zoom functionality does not work properly
+    axes[0].set_ylabel(r"Waist ($\mu$m)")
+    axes[0].set_xlim((p["plot_range"][0]*1e2,p["plot_range"][1]*1e2))
+    axes[0].legend()
     
-    # ax.set_xticklabels(["{:.0f}".format(x) for x in ax.get_xticks()*1e2])
-    # ax.set_yticklabels(["{:.0f}".format(y) for y in ax.get_yticks()*1e+6])
-    ax.set_xlabel("Distance (cm)")
-    ax.set_ylabel(r"Waist ($\mu$m")
-    ax.set_xlim((p["plot_range"][0]*1e2,p["plot_range"][1]*1e2))
-    ax.legend()
+    axes[1].set_xlabel("Distance (cm)")
+    axes[1].set_ylabel("Radius (m)")
+    axes[1].set_xlim((p["plot_range"][0]*1e2,p["plot_range"][1]*1e2))
+    axes[1].legend()
     
     return p
 
 #%% Example calculation
 
-# Define a scneary with a couple of transfer matrixes and
-# corresponding positions
-# dist = [0.3,0.6, 1, 1.2,1.3]
-# f1,f2,f3 = 0.2, 0.1, 0.6
-# n1,n2 = 1,2
-# objects = [ThinLens(f1),ThinLens(f2),ThinLens(f3),CurvedRefraction(0.3,n1,n2),CurvedRefraction(-0.3,n2,n1)]
-# n = [n1,n1,n1,n1,n1,n1]
-
-n1,n2 = 1,1.4         # Some refractive indices
-waist = 500e-6         # Beam waist (m)
-dist = [0.4]   # Position of objects, array of length len(dist)
-plot_range = (0,1.8)     # Lotting range, should be biger than "dist"
-n = [n1]  *(len(dist)+1)    # Refractive index, array of length len(dist)+1
-# n = [n1,n1,n2,n1]
-# Objects at the positions given by "dist"
-objects = [ThinLens(0.1), ThinLens(0.1)]
-objects = [ThinLens(0.2)]
-
-param = {"dist": dist,
-         "objects": objects,
-         "p_init": BeamParameter(780e-9,0, w = waist),
-         "refr": n,
-         "plot_range": plot_range}
-
 # Figure and axis to plot ontp
-fig, ax = plt.subplots(num = 1)
+fig, axes = plt.subplots(2,1,num = 1)
 # an iterator for the colors
 c = itertools.cycle(colors)
 
-# Loop through some parameter set
-# for f1 in [.05, .1, .15, .2,2]:
-for waist in [100e-6,200e-6, 50e-6]:
+# Define a scneary with a couple of transfer matrixes and
+# corresponding positions
+
+f1,f2 = 0.35, 0.15
+plot_range = (0,0.05)     # Plotting range, should be biger than "dist"
+
+
+# dist = [0.008]
+# n_glass = 1.43
+# objects = [CurvedRefraction(-0.2, n_glass,1)]
+# plot_range = (0,0.02)     # Lotting range, should be biger than "dist"
+# beamPara = BeamParameter(780e-9, 0, n_glass, w = 100e-6)
+
+dist = [0.1]
+objects = [ThinLens(f1)]
+beamPara = BeamParameter(780e-9, 0, 1, w = 800e-6)
+
+param1 = {"dist": dist,
+          "objects": objects,
+          "p_init": beamPara,
+          "plot_range": plot_range}
+
+dist = [0.1]
+objects = [ThinLens(f1)]
+beamPara = BeamParameter(780e-9, 0, 1, w = 1200e-6)
+
+param2 = {"dist": dist,
+          "objects": objects,
+          "p_init": beamPara,
+          "plot_range": plot_range}
+
+dist = []
+objects = []
+beamPara = BeamParameter(780e-9, 0, 1, w = 1200e-6)
+
+param = {"dist": dist,
+          "objects": objects,
+          "p_init": beamPara,
+          "plot_range": plot_range}
+
+scanThis = [BeamParameter(780e-9, 0, 1.45, w = 57e-6),
+            BeamParameter(780e-9, 0, 1.5, w = 45e-6),
+            BeamParameter(780e-9, 0, 1.5, w = 58e-6),]
+
+para = "p_init"
+for scanner in scanThis:
     param_c = param.copy()
-    param_c["p_init"] = BeamParameter(780e-9,0, w = waist)
-    p_propagated = propagate(param_c, ax, next(c))
+    param_c[para] = scanner
+    print(scanner.w_0)
+    p_propagated = propagate(param_c, axes, next(c), label =scanner.w_0)
+    
+#%%
+# Quanteaser
+thickness = 0.0053
+R = 0.075
+n = 1.45
+
+# ours 1 thick
+thickness = 0.008
+R = 0.06
+n = 1.5
+
+# ours 1 thin
+# thickness = 0.004
+# R = 0.04
+# n = 1.5
+
+# new
+thickness = 0.00635
+R = 0.1
+n = 1.45
+
+
+
+z_r = thickness*np.sqrt(R/thickness-1)
+w_0 = np.sqrt(z_r*780e-9/n/np.pi)
+print(f"Raleighlength is {z_r*1e2:.02f} cm")
+print(f"Beamsize at z=0 is {w_0*1e6:.02f} um")
+
+#%%
+
+z = np.linspace(0,10,100)
+z_r_list  = np.linspace(0.11,1,10)
+for z_r in z_r_list:
+    plt.plot(z, z*(1+(z_r/z)**2))
+

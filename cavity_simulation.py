@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.constants as con
-# import seaborn as sns
-# sns.set() 
-# sns.set_context("talk")
+
+import seaborn as sns
+sns.set() 
+sns.set_context("paper")
 
 c = con.c                       # Speed of light (m/s)
 
@@ -37,17 +38,22 @@ c = con.c                       # Speed of light (m/s)
 #      'high_res': False}         # High resolution (only for low finesse)
 
 #%% Definition of reflectivities and losses
-# FP filtering cavity
+# new FP filtering cavity
 
 p = {'I_inc': 1,                # Input power (W)
-     'R_in': 0.97,              # Reflectivity of input mirror (%)
-     'R_out': 0.97,             # Reflectivity of output mirror (%)
+     'R_in': 0.99,              # Reflectivity of input mirror (%)
+     'R_out': 0.99,             # Reflectivity of output mirror (%)
      'R_n':[],                  # Additional mirrors (%)
      
+     # 'p': np.array([16e-3]),    # Effective cavity length (equals 2L for linear cavity) (m)
+     # 'n': np.array([1.53]),     # Refractive index of medium
+     # 'a': np.array([1000e-4]),    # Absorption coefficient of medium (1/m)
+     # 'L': np.array([2*20e-6 + 2*13e-6 + 2*1e-6]),    # Extra losses per roundtrip (%)
+     
      'p': np.array([16e-3]),    # Effective cavity length (equals 2L for linear cavity) (m)
-     'n': np.array([1.53]),     # Refractive index of medium
-     'a': np.array([]),         # Absorption coefficient of medium (1/m)
-     'L': np.array([0.008]),    # Extra losses per roundtrip (%)
+     'n': np.array([1.45]),     # Refractive index of medium
+     'a': np.array([1000e-4]),  # Absorption coefficient of medium (1/m)
+     'L': np.array([200e-6]),   # Extra losses per roundtrip (%)
      
      'p_0': np.array([]),   # Effective first cavity leg (L for linear cavity) (m)
      'n_0': np.array([]),    # Refractive index on first leg
@@ -55,7 +61,7 @@ p = {'I_inc': 1,                # Input power (W)
      'R_0': np.array([]),       # Mirrors on first leg (%)
      'L_0': np.array([]),      # Extra losses on first leg (%)
      
-     'lambda': 780e-9,          # Central wavelength (m)
+     'lambda': 780.001e-9,          # Central wavelength (m)
      'high_res': False}         # High resolution (only for low finesse)
 
 #%% Updates cavity parameters. Depend on the definition of parameters p above
@@ -88,11 +94,12 @@ def p_update(p):
 p = p_update(p)
 
 #%%
-f_min = c/780.051e-9 # Minimum frequency
+f_min = c/780.12e-9 # Minimum frequency
 f_max = c/780e-9     # Maximum frequency
 
 # List of frequencies*2pi between f_min and f_max
-omega = np.linspace(2*np.pi*f_min,2*np.pi*f_max,30000)
+omega = np.linspace(2*np.pi*f_min,2*np.pi*f_max,1000)
+omega = np.linspace(0,2*np.pi*30e9,10000)
 
 def fields(p, omega):
     g_omega = np.exp(-1j*omega*p['p_eff']/c)
@@ -124,11 +131,13 @@ def cav_params(p):
     
 plt.close('all')
 fig,ax = plt.subplots(1,4, figsize = (12,3), num = 1)
-para = "L"
+para = "p"
 
-for scanner in [np.array([0.11])]:
+for scanner in [np.array([0.02]),
+                np.array([0.012]),
+                np.array([0.008])]:
     p_temp = p.copy()
-    # p_temp[para] = scanner
+    p_temp[para] = scanner
     
     if not p_temp['high_res']:
         p_temp["p_0"] = p_temp["p"]/2
@@ -143,10 +152,10 @@ for scanner in [np.array([0.11])]:
     E_circ, E_trans, E_refl, E_circ_per_E_launch = fields(p_temp, omega)
     cav_params(p_temp)
     
-    ax[0].plot(omega, np.abs(E_circ/p['E_inc'] )**2, label =  label)
-    ax[1].plot(omega, np.abs(E_trans/p['E_inc'] )**2, label = label)
-    ax[2].plot(omega, np.abs(E_refl/p['E_inc'] )**2, label = label)
-    ax[3].plot(omega, 1-np.abs(E_refl/p['E_inc'] )**2 - np.abs(E_trans/p['E_inc'] )**2, label = label)
+    ax[0].semilogy(omega/2/np.pi*1e-9, np.abs(E_circ/p['E_inc'] )**2, label =  label)
+    ax[1].semilogy(omega/2/np.pi*1e-9, np.abs(E_trans/p['E_inc'] )**2, label = label)
+    ax[2].semilogy(omega/2/np.pi*1e-9, np.abs(E_refl/p['E_inc'] )**2, label = label)
+    ax[3].semilogy(omega/2/np.pi*1e-9, 1-np.abs(E_refl/p['E_inc'] )**2 - np.abs(E_trans/p['E_inc'] )**2, label = label)
 
 ax[0].set_title( "Circulating")
 ax[0].set_ylabel(r"$I_{circ}/I_{inc}$")
