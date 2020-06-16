@@ -230,7 +230,6 @@ R = 0.1
 n = 1.45
 
 
-
 z_r = thickness*np.sqrt(R/thickness-1)
 w_0 = np.sqrt(z_r*780e-9/n/np.pi)
 print(f"Raleighlength is {z_r*1e2:.02f} cm")
